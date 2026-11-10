@@ -1,5 +1,5 @@
 ARG BUILD_ARCH
-FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:latest
+FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:trixie
 
 ARG BUILD_ARCH
 ARG TAILSCALE_VERSION="1.104.5"

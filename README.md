@@ -1,28 +1,33 @@
-# Home Assistant Add-ons: @tsujamin's repository
+# ILSE add-ons
 
-This repository contains additional add-ons for your Home Assistant.
-These add-ons are primarily used only by the author; as such, your individual mileage may vary.
+Home Assistant add-ons by [Smart Energy Control](https://www.smartenergycontrol.be).
+
+[![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fsmartenergycontrol-be%2Filse-addons)
+
+## Add-ons
+
+| Add-on | Description |
+| --- | --- |
+| [Tailscale](tailscale/) | Secure remote connection over Tailscale or a self-hosted control server. Based on [hass-tailscale/hass-addons](https://github.com/hass-tailscale/hass-addons). |
 
 ## Installation
 
-### Quick Installation
+1. In Home Assistant go to Settings > Apps > App store, open the menu (three dots) and choose Repositories.
+2. Add `https://github.com/smartenergycontrol-be/ilse-addons`.
+3. Install the add-on, fill in its configuration and start it.
 
-[![Open your Home Assistant instance and show the add app repository dialog with a specific repository URL pre-filled.][supervisor-badge]](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fhass-tailscale%2Fhass-addons)
+## Tailscale options
 
----
+| Option | Example | Meaning |
+| --- | --- | --- |
+| `auth_key` | `tskey-...` | Pre-auth key from your control server (required) |
+| `login_server` | `https://headscale.example.com` | Control server URL |
+| `hostname` | `my-home` | Name of this device on the tailnet |
+| `userspace_networking` | `false` | `false` creates a `tailscale0` interface on the host |
+| `accept_routes` | `false` | Accept subnet routes from other nodes |
 
-### Manual Installation
+All other options are documented in [tailscale/DOCS.md](tailscale/DOCS.md).
 
-A user can add a repository by going to the Supervisor panel in Home Assistant, clicking the store icon in the top-right, copying and pasting the repository URL into the repository text area, then clicking Save.
+## Credits
 
-See ["Create an add-on repository"](https://developers.home-assistant.io/docs/add-ons/repository/) for more information.
-
-## Repository Add-ons
-
-- **[Tailscale](https://github.com/hass-tailscale/hass-addons/tailscale/README.md)**: A Tailscale add-on for Home Assistant, allowing you to connect your Home Assistant instance to your Tailscale network.
-
-## Updates
-
-A scheduled GitHub Actions workflow checks for new stable Tailscale releases and commits a version bump when one is published. Home Assistant then offers the update, and the add-on is built on your device when you install it.
-
-[supervisor-badge]: https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg
+The Tailscale add-on is a fork of [hass-tailscale/hass-addons](https://github.com/hass-tailscale/hass-addons).

@@ -2,8 +2,8 @@
   "name": "Tailscale",
   "version": "1.104.5.0",
   "slug": "tailscale",
-  "description": "Secure Connectivity for AI, IoT & Multi-Cloud",
-  "url": "https://github.com/hass-tailscale/hass-addons/tree/main/tailscale",
+  "description": "Beveiligde verbinding met Smart Energy Control (headscale)",
+  "url": "https://github.com/smartenergycontrol-be/ilse-addons/tree/main/tailscale",
   "arch": [
     "armhf",
     "armv7",
@@ -21,8 +21,10 @@
     "/dev/net/tun"
   ],
   "options": {
-    "hostname": "homeassistant",
-    "userspace_networking": true
+    "hostname": "ilse",
+    "login_server": "https://secure.smartenergycontrol.be",
+    "userspace_networking": false,
+    "accept_routes": false
   },
   "map": [
     "ssl:rw"
