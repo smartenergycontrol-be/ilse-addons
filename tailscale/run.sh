@@ -2,6 +2,9 @@
 
 set -eu
 
+# shellcheck source=/dev/null
+. /usr/lib/sec/hostname-auto.sh
+
 TAILSCALE_SOCKET="/var/run/tailscale/tailscaled.sock"
 TAILSCALE_FLAGS=()
 TAILSCALED_FLAGS=("-statedir" "/data" "-state" "/data/tailscaled.state" "-socket" "$TAILSCALE_SOCKET")
@@ -24,7 +27,11 @@ if bashio::config.has_value 'reset'; then
 fi
 
 if bashio::config.has_value 'hostname'; then
-    TAILSCALE_FLAGS+=('-hostname' "$(bashio::config 'hostname')")
+    # "{mac}" in de naam: bij de eerste start vervangen door de laatste 6 hex-tekens van de MAC
+    # van de vaste netwerkkaart, bewaard in /data/sec-hostname (zie hostname-auto.sh)
+    TS_HOSTNAME="$(sec_resolve_hostname "$(bashio::config 'hostname')")"
+    bashio::log.info "Tailscale-naam: ${TS_HOSTNAME}"
+    TAILSCALE_FLAGS+=('-hostname' "${TS_HOSTNAME}")
 fi
 
 if bashio::config.has_value 'login_server'; then

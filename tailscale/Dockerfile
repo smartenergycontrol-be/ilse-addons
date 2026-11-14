@@ -17,6 +17,7 @@ COPY install.sh /
 RUN chmod a+x /install.sh
 RUN /install.sh $BUILD_ARCH $TAILSCALE_VERSION
 
+COPY hostname-auto.sh /usr/lib/sec/hostname-auto.sh
 COPY run.sh /
 RUN chmod a+x /run.sh
 CMD [ "/run.sh" ]

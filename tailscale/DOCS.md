@@ -75,6 +75,8 @@ This option determines the name of your system as it will appear in Tailscale (f
 
 This value defaults to `homeassistant`.
 
+If the value contains `{mac}` (for example `ilse-{mac}`), it is replaced on the first start by the last 6 hex digits of the MAC address of the first wired network card. The result is stored in `/data/sec-hostname` and reused on every later start, so the name stays the same even if network hardware changes.
+
 ### Option: `force_reauth` (optional)
 
 Setting this option to `true` will cause Tailscale to attempt to reauthenticate with the service when the container starts.

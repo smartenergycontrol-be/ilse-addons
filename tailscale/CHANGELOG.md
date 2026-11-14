@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.104.5.0.1
+
+- `hostname` accepts `{mac}`: replaced on first start by the last 6 hex digits of the wired network card's MAC address and kept in `/data/sec-hostname`, so every device gets its own stable name
+
+
 ## 1.104.5.0
 
 - Tailscale package updated to version `1.104.5`

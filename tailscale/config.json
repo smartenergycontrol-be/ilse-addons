@@ -1,6 +1,6 @@
 {
   "name": "Tailscale",
-  "version": "1.104.5.0",
+  "version": "1.104.5.0.1",
   "slug": "tailscale",
   "description": "Beveiligde verbinding met Smart Energy Control (headscale)",
   "url": "https://github.com/smartenergycontrol-be/ilse-addons/tree/main/tailscale",
