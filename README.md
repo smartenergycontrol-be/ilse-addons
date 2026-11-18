@@ -8,6 +8,7 @@ Home Assistant add-ons by [Smart Energy Control](https://www.smartenergycontrol.
 
 | Add-on | Description |
 | --- | --- |
+| [ILSE S2 Gateway](s2_gateway/) | Expose Home Assistant devices as S2 (EN 50491-12-2) resource managers to an external energy manager. Read-only shadow mode. |
 | [Tailscale](tailscale/) | Secure remote connection over Tailscale or a self-hosted control server. Based on [hass-tailscale/hass-addons](https://github.com/hass-tailscale/hass-addons). |
 
 ## Installation
@@ -31,3 +32,7 @@ All other options are documented in [tailscale/DOCS.md](tailscale/DOCS.md).
 ## Credits
 
 The Tailscale add-on is a fork of [hass-tailscale/hass-addons](https://github.com/hass-tailscale/hass-addons).
+
+## ILSE S2 Gateway
+
+Turns batteries and switchable loads that Home Assistant can read into S2 devices (batteries as FRBC, switches as OMBC), so an S2 energy manager can see their flexibility. Version 0.1 never writes to Home Assistant: instructions are acknowledged, reported as rejected and logged. See [s2_gateway/DOCS.md](s2_gateway/DOCS.md).
