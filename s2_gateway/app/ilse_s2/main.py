@@ -12,6 +12,7 @@ import threading
 import time
 
 from . import __version__
+from . import web
 from .gateway import Gateway
 
 log = logging.getLogger("ilse_s2")
@@ -29,11 +30,11 @@ def record(rec: dict) -> None:
         pass
 
 
-def start_self_test_cem(port: int) -> None:
+def start_self_test_cem(port: int, every_min: int) -> None:
     from . import testcem
 
     def run():
-        asyncio.run(testcem.run(port, True, []))
+        asyncio.run(testcem.run(port, True, [], every_min=every_min))
 
     threading.Thread(target=run, daemon=True, name="test-cem").start()
     time.sleep(1.0)
@@ -55,9 +56,10 @@ def main() -> None:
     if conf.get("self_test_cem", False):
         url = conf.get("cem_url", "")
         port = int(url.split(":")[2].split("/")[0]) if url.count(":") >= 2 else 8003
-        start_self_test_cem(port)
+        start_self_test_cem(port, int(conf.get("self_test_every_min") or 0))
     gw = Gateway(conf, a.site, record=record)
     gw.start()
+    web.serve(gw, 8099)
     while True:
         time.sleep(300)
         log.info("health %s", json.dumps(gw.health(), default=str))

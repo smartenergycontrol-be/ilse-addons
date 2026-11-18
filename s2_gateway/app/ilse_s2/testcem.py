@@ -36,7 +36,9 @@ PREFERENCE = [
 
 
 class Session:
-    def __init__(self, ws, send_instruction: bool, events: list):
+    def __init__(self, ws, send_instruction: bool, events: list, every_min: int = 0):
+        self.every_min = every_min
+        self.repeat: asyncio.Task | None = None
         self.ws = ws
         self.parser = S2Parser()
         self.send_instruction = send_instruction
@@ -52,6 +54,20 @@ class Session:
         self.events.append(rec)
         del self.events[:-500]
         log.info("CEM %s", json.dumps(rec, default=str))
+
+    async def instruct(self, make, **what) -> None:
+        """Send a test instruction now and, with every_min, again at that interval."""
+        self.ev("instruction-sent", **what)
+        await self.send(make())
+        if self.every_min and self.repeat is None:
+
+            async def again():
+                while True:
+                    await asyncio.sleep(self.every_min * 60)
+                    self.ev("instruction-sent", **what)
+                    await self.send(make())
+
+            self.repeat = asyncio.create_task(again())
 
     async def handle(self, raw: str) -> None:
         msg = self.parser.parse_as_any_message(raw)
@@ -85,9 +101,9 @@ class Session:
             if self.send_instruction and not self.instruction_sent and "discharge" in modes:
                 self.instruction_sent = True
                 await asyncio.sleep(2)
-                self.ev("instruction-sent", mode="discharge", factor=0.6)
-                await self.send(
-                    FRBCInstruction(
+
+                def make():
+                    return FRBCInstruction(
                         message_id=uuid.uuid4(),
                         id=uuid.uuid4(),
                         actuator_id=act.id,
@@ -96,16 +112,17 @@ class Session:
                         execution_time=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=30),
                         abnormal_condition=False,
                     )
-                )
+
+                await self.instruct(make, mode="discharge", factor=0.6)
         elif t == "OMBC.SystemDescription":
             modes = {m.diagnostic_label: m for m in msg.operation_modes}
             self.ev("ombc-description", modes=list(modes))
             if self.send_instruction and not self.instruction_sent and "on" in modes:
                 self.instruction_sent = True
                 await asyncio.sleep(2)
-                self.ev("instruction-sent", mode="on")
-                await self.send(
-                    OMBCInstruction(
+
+                def make():
+                    return OMBCInstruction(
                         message_id=uuid.uuid4(),
                         id=uuid.uuid4(),
                         operation_mode_id=modes["on"].id,
@@ -113,7 +130,8 @@ class Session:
                         execution_time=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=30),
                         abnormal_condition=False,
                     )
-                )
+
+                await self.instruct(make, mode="on")
         elif t == "PowerMeasurement":
             self.ev("measurement", w=[v.value for v in msg.values])
         elif t == "FRBC.StorageStatus":
@@ -126,9 +144,15 @@ class Session:
             self.ev("message", message_type=t)
 
 
-async def run(port: int, send_instruction: bool, events: list, stop: asyncio.Event | None = None):
+async def run(
+    port: int,
+    send_instruction: bool,
+    events: list,
+    stop: asyncio.Event | None = None,
+    every_min: int = 0,
+):
     async def handler(ws):
-        s = Session(ws, send_instruction, events)
+        s = Session(ws, send_instruction, events, every_min)
         try:
             async for raw in ws:
                 try:
@@ -136,6 +160,8 @@ async def run(port: int, send_instruction: bool, events: list, stop: asyncio.Eve
                 except Exception as e:  # noqa: BLE001 - test CEM: log and continue
                     s.ev("error", error=str(e)[:300])
         finally:
+            if s.repeat:
+                s.repeat.cancel()
             s.ev("disconnected")
 
     async with serve(handler, "127.0.0.1", port):

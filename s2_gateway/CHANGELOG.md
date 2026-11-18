@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Web page in the Home Assistant sidebar (ingress): per device who is in control
+  (ILSE, an energy manager that only watches, one that may steer, or one that has
+  taken over), live state of charge and power, the last instruction and a timeline.
+  A banner shows at once when an external energy manager has taken control.
+- Option `self_test_every_min`: the self-test energy manager repeats its test
+  instruction at this interval (0 = once), handy for a demo.
+
 ## 0.1.1
 
 - Start through a with-contenv script so the add-on can read Home Assistant
