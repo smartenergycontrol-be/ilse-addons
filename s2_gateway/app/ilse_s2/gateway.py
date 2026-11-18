@@ -14,6 +14,7 @@ Device types:
 
 from __future__ import annotations
 
+import asyncio
 import collections
 import datetime as dt
 import json
@@ -39,7 +40,11 @@ from s2python.common import (
     Transition,
 )
 from s2python.connection import AssetDetails
-from s2python.connection.quickstarts import BlockingWebsocketClientRM
+from s2python.connection.async_.medium.websocket import WebsocketClientMedium
+from s2python.connection.sync import S2SyncConnection
+from s2python.connection.sync.control_type.class_based import (
+    ResourceManagerHandler,
+)
 from s2python.connection.sync.control_type.class_based import (
     FRBCControlType,
     NoControlControlType,
@@ -544,18 +549,37 @@ class Gateway:
         )
         return details, cts
 
+    def connect_once(self, dev: Device, url: str) -> None:
+        """One S2 session over WebSocket, in this thread.
+
+        Unlike the library quickstart (which disables certificate checks), wss:// is
+        verified against the system trust store unless verify_certificate is false,
+        and an optional bearer token is sent as in S2 Connect.
+        """
+        details, cts = self.asset(dev)
+        loop = asyncio.new_event_loop()
+        try:
+            medium = WebsocketClientMedium(
+                url=url,
+                verify_certificate=bool(self.conf.get("verify_certificate", True)),
+                bearer_token=self.conf.get("cem_token") or None,
+            )
+            loop.run_until_complete(medium.connect())
+            conn = S2SyncConnection(medium=medium, eventloop=loop)
+            ResourceManagerHandler(asset_details=details, control_types=cts).register_handlers(conn)
+            dev.stats["connected"] = True
+            dev.stats["connected_since"] = utcnow().isoformat()
+            dev.event("connect", f"Connected to energy manager as S2 resource manager {dev.rm_id}")
+            log.info("%s: connected to %s as RM %s", dev.name, url, dev.rm_id)
+            conn.run()
+        finally:
+            loop.close()
+
     def run_device(self, dev: Device) -> None:
         url = self.conf["cem_url"].replace("{rm_id}", str(dev.rm_id))
         while not self._stop.is_set():
             try:
-                details, cts = self.asset(dev)
-                conn = BlockingWebsocketClientRM(url=url, asset_details=details, control_types=cts)
-                dev.stats["connected"] = True
-                dev.stats["connected_since"] = utcnow().isoformat()
-                dev.event("connect", f"Connected to energy manager as S2 resource manager {dev.rm_id}")
-                log.info("%s: connecting to %s as RM %s", dev.name, url, dev.rm_id)
-                conn.start()
-                conn.wait_till_done()
+                self.connect_once(dev, url)
                 dev.event("disconnect", "Connection closed")
             except Exception as e:  # noqa: BLE001 - retry
                 log.warning("%s: connection lost: %s", dev.name, e)

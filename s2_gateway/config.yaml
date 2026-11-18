@@ -1,5 +1,5 @@
 name: ILSE S2 Gateway
-version: "0.4.0"
+version: "0.5.0"
 slug: ilse_s2_gateway
 description: Expose Home Assistant devices as S2 (EN 50491-12-2) resource managers to an external energy manager. Read-only shadow mode.
 url: https://github.com/smartenergycontrol-be/ilse-addons/tree/main/s2_gateway
@@ -31,6 +31,8 @@ options:
 schema:
   site_name: str?
   cem_url: str
+  cem_token: password?
+  verify_certificate: bool?
   self_test_cem: bool
   self_test_every_min: int(0,1440)
   interval_s: int(5,600)
