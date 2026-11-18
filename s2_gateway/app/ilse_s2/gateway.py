@@ -14,6 +14,7 @@ Device types:
 
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import json
 import logging
@@ -114,17 +115,27 @@ class Device:
         self.rm_id = stable_id(site, self.name)
         self.active = False
         self._stop = threading.Event()
+        self.events: collections.deque = collections.deque(maxlen=60)
         self.stats = {
             "control_type": None,
             "connected": False,
+            "connected_since": None,
             "instructions": 0,
             "last_instruction": None,
             "last_status": None,
+            "soc": None,
+            "power_w": None,
         }
+
+    def event(self, kind: str, text: str, **kw) -> None:
+        """Timeline entry for the web page (newest last)."""
+        self.events.append({"t": utcnow().isoformat(), "kind": kind, "text": text, **kw})
 
     def power_w(self) -> float | None:
         factor = float(self.conf.get("power_factor") or 1)
-        return self.ha.number(self.conf.get("power_entity"), factor)
+        w = self.ha.number(self.conf.get("power_entity"), factor)
+        self.stats["power_w"] = None if w is None else round(w, 1)
+        return w
 
     def send(self, connection, msg) -> None:
         try:
@@ -159,6 +170,8 @@ class Device:
         }
         self.stats["last_instruction"] = rec
         self.gw.record(rec)
+        desc = ", ".join(f"{k} {v}" for k, v in what.items())
+        self.event("instruction", f"Instruction: {desc}. Rejected, shadow mode (not executed)", **what)
         log.info("%s: instruction %s -> REJECTED (shadow mode, not executed)", self.name, what)
         self.send(
             connection,
@@ -273,6 +286,7 @@ class BatteryFRBC(FRBCControlType):
 
     def tick(self, connection) -> None:
         soc = self.dev.ha.number(self.dev.conf.get("soc_entity"))
+        self.dev.stats["soc"] = soc
         if soc is not None:
             self.dev.send(
                 connection, FRBCStorageStatus(message_id=uuid.uuid4(), present_fill_level=soc)
@@ -298,12 +312,14 @@ class BatteryFRBC(FRBCControlType):
 
     def activate(self, connection) -> None:
         self.dev.stats["control_type"] = "FRBC"
+        self.dev.event("control", "Energy manager selected fill rate based (FRBC): it may now send instructions")
         self.dev.send(connection, self.description())
         self.dev.start_loop(connection, self.tick)
         log.info("%s: FRBC active (state of charge, charge/idle/discharge)", self.dev.name)
 
     def deactivate(self, connection) -> None:
         self.dev.active = False
+        self.dev.event("control", "Control type deactivated")
 
 
 class SwitchOMBC(OMBCControlType):
@@ -352,12 +368,14 @@ class SwitchOMBC(OMBCControlType):
 
     def activate(self, connection) -> None:
         self.dev.stats["control_type"] = "OMBC"
+        self.dev.event("control", "Energy manager selected operation mode based (OMBC): it may now send instructions")
         self.dev.send(connection, self.description())
         self.dev.start_loop(connection, self.tick)
         log.info("%s: OMBC active (off/on %s W)", self.dev.name, self.w)
 
     def deactivate(self, connection) -> None:
         self.dev.active = False
+        self.dev.event("control", "Control type deactivated")
 
 
 class NoControl(NoControlControlType):
@@ -366,10 +384,12 @@ class NoControl(NoControlControlType):
 
     def activate(self, connection) -> None:
         self.dev.stats["control_type"] = "NOT_CONTROLABLE"
+        self.dev.event("control", "Energy manager selected not controllable: measurements only")
         self.dev.start_loop(connection, lambda c: None)
 
     def deactivate(self, connection) -> None:
         self.dev.active = False
+        self.dev.event("control", "Control type deactivated")
 
 
 class Gateway:
@@ -409,12 +429,18 @@ class Gateway:
                 details, cts = self.asset(dev)
                 conn = BlockingWebsocketClientRM(url=url, asset_details=details, control_types=cts)
                 dev.stats["connected"] = True
+                dev.stats["connected_since"] = utcnow().isoformat()
+                dev.event("connect", f"Connected to energy manager as S2 resource manager {dev.rm_id}")
                 log.info("%s: connecting to %s as RM %s", dev.name, url, dev.rm_id)
                 conn.start()
                 conn.wait_till_done()
+                dev.event("disconnect", "Connection closed")
             except Exception as e:  # noqa: BLE001 - retry
                 log.warning("%s: connection lost: %s", dev.name, e)
+                dev.event("disconnect", f"Connection failed: {str(e)[:120]}")
             dev.stats["connected"] = False
+            dev.stats["connected_since"] = None
+            dev.stats["control_type"] = None
             dev.active = False
             self._stop.wait(float(self.conf.get("reconnect_s", 30)))
 
@@ -424,6 +450,49 @@ class Gateway:
 
     def stop(self) -> None:
         self._stop.set()
+
+    def view(self) -> dict:
+        """Everything the web page shows, including who is in control per device."""
+        self_test = bool(self.conf.get("self_test_cem"))
+        cem = "built-in test energy manager" if self_test else self.conf.get("cem_url", "")
+        out = []
+        for d in self.devices:
+            st = dict(d.stats)
+            ct = st["control_type"]
+            last = st["last_instruction"]
+            recent = False
+            if last:
+                age = utcnow() - dt.datetime.fromisoformat(last["received"])
+                recent = age.total_seconds() < 15 * 60
+            if not st["connected"]:
+                state, label = "ilse", "ILSE in control"
+            elif ct in (None, "NOT_CONTROLABLE"):
+                state, label = "watching", "Energy manager connected, watching only"
+            elif recent:
+                state, label = "taken", "Taken over by external energy manager"
+            else:
+                state, label = "ready", "External energy manager may steer"
+            out.append(
+                {
+                    "name": d.name,
+                    "type": d.conf.get("type"),
+                    "rm_id": str(d.rm_id),
+                    "state": state,
+                    "label": label,
+                    "rating_w": d.conf.get("power_w") or d.conf.get("max_discharge_w"),
+                    "capacity_kwh": d.conf.get("capacity_kwh"),
+                    **st,
+                    "events": list(d.events),
+                }
+            )
+        return {
+            "site": self.site,
+            "cem": cem,
+            "self_test": self_test,
+            "shadow": True,
+            "now": utcnow().isoformat(),
+            "devices": out,
+        }
 
     def health(self) -> dict:
         return {

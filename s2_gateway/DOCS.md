@@ -32,6 +32,7 @@ Both also offer "not controllable", for a CEM that only wants measurements.
 | `site_name` | Name of this installation, used in the device names and ids (default: host name) |
 | `cem_url` | WebSocket URL of the CEM; `{rm_id}` is replaced by the device id |
 | `self_test_cem` | Start a minimal test CEM inside the add-on on the port of `cem_url` |
+| `self_test_every_min` | Repeat the self-test instruction every N minutes (0 = once) |
 | `interval_s` | How often status and power are sent |
 | `devices` | List of devices (see below) |
 
@@ -47,6 +48,20 @@ Per device:
 | `capacity_kwh`, `max_charge_w`, `max_discharge_w` | battery | Size and power limits |
 | `state_entity` | switch | Optional on/off entity |
 | `power_w` | switch | Power when on |
+
+## Web page
+
+Open **S2 Gateway** in the Home Assistant sidebar. Per device you see who is in control:
+
+| Status | Meaning |
+| --- | --- |
+| ILSE in control | no external energy manager connected |
+| Energy manager connected, watching only | connected, but no control type that allows steering |
+| External energy manager may steer | a control type was selected, no instruction in the last 15 minutes |
+| Taken over by external energy manager | instructions received in the last 15 minutes (in shadow mode: logged, not executed) |
+
+Plus live state of charge and power, the last instruction and a timeline of
+connections, control type changes and instructions.
 
 ## Self-test
 
