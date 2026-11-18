@@ -7,4 +7,6 @@ COPY app /app
 WORKDIR /app
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1
 
-CMD ["python3", "-m", "ilse_s2.main", "--options", "/data/options.json"]
+COPY run.sh /run.sh
+RUN chmod a+x /run.sh
+CMD ["/run.sh"]
