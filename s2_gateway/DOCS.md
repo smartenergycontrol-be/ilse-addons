@@ -21,7 +21,9 @@ Nothing is ever written to Home Assistant.
 | Device type | S2 control type | Described as |
 | --- | --- | --- |
 | `battery` | FRBC (fill rate based) | fill level = state of charge in %, operation modes charge, idle, discharge |
+| `ev` | FRBC (fill rate based) | fill level = the car's state of charge; idle always, charge (min to max power) only while plugged in; optional target as fill level target profile |
 | `switch` | OMBC (operation mode based) | operation modes off and on at a fixed power |
+| `pv` | not controllable (for now) | measurements only; curtailment through PEBC follows |
 
 Both also offer "not controllable", for a CEM that only wants measurements.
 
@@ -41,11 +43,17 @@ Per device:
 | Field | For | Meaning |
 | --- | --- | --- |
 | `name` | all | Device name |
-| `type` | all | `battery` or `switch` |
+| `type` | all | `battery`, `ev`, `switch` or `pv` |
+| `label` | all | Optional model or description shown on the web page |
+| `icon` | all | Optional illustration: battery, inverter, charger, car, boiler, switch, pv |
 | `power_entity` | all | Power sensor (W or kW) |
 | `power_factor` | all | Multiply the sensor by this to get positive = consumption (often `-1` for batteries) |
 | `soc_entity` | battery | State of charge sensor (%) |
 | `capacity_kwh`, `max_charge_w`, `max_discharge_w` | battery | Size and power limits |
+| `plugged_entity` | ev | Entity that tells whether the car is plugged in |
+| `plugged_state` | ev | State of `plugged_entity` that means plugged in (default `on`) |
+| `min_charge_w`, `max_charge_w`, `capacity_kwh` | ev | Charging power range and battery size |
+| `target_soc`, `departure` | ev | Optional target: at least `target_soc` % at `departure` (HH:MM, local time) |
 | `state_entity` | switch | Optional on/off entity |
 | `power_w` | switch | Power when on |
 

@@ -48,6 +48,8 @@ from s2python.connection.sync.control_type.class_based import (
 from s2python.frbc import (
     FRBCActuatorDescription,
     FRBCActuatorStatus,
+    FRBCFillLevelTargetProfile,
+    FRBCFillLevelTargetProfileElement,
     FRBCOperationMode,
     FRBCOperationModeElement,
     FRBCStorageDescription,
@@ -125,6 +127,8 @@ class Device:
             "last_status": None,
             "soc": None,
             "power_w": None,
+            "plugged_in": None,
+            "target": None,
         }
 
     def event(self, kind: str, text: str, **kw) -> None:
@@ -227,6 +231,11 @@ class BatteryFRBC(FRBCControlType):
             "idle": (0.0, 0.0),
             "discharge": (-self.max_out, 0.0),
         }
+        self.provides_target = False
+
+    def offered(self) -> list[str]:
+        """Operation modes offered to the CEM right now."""
+        return list(self.modes)
 
     def rate(self, w: float) -> float:
         """Fill rate in %/s at w watt (positive = charging)."""
@@ -252,7 +261,8 @@ class BatteryFRBC(FRBCControlType):
                 ],
             )
 
-        pairs = [(a, b) for a in self.modes for b in self.modes if a != b]
+        keys = self.offered()
+        pairs = [(a, b) for a in keys for b in keys if a != b]
         return FRBCSystemDescription(
             message_id=uuid.uuid4(),
             valid_from=utcnow(),
@@ -261,7 +271,7 @@ class BatteryFRBC(FRBCControlType):
                     id=self.actuator,
                     diagnostic_label=self.dev.name,
                     supported_commodities=[Commodity.ELECTRICITY],
-                    operation_modes=[mode(k) for k in self.modes],
+                    operation_modes=[mode(k) for k in keys],
                     transitions=_transitions(self.dev.name, self.modes, pairs),
                     timers=[],
                 )
@@ -270,7 +280,7 @@ class BatteryFRBC(FRBCControlType):
                 diagnostic_label=self.dev.name,
                 fill_level_label="SoC %",
                 provides_leakage_behaviour=False,
-                provides_fill_level_target_profile=False,
+                provides_fill_level_target_profile=self.provides_target,
                 provides_usage_forecast=False,
                 fill_level_range=NumberRange(start_of_range=0, end_of_range=100),
             ),
@@ -320,6 +330,112 @@ class BatteryFRBC(FRBCControlType):
     def deactivate(self, connection) -> None:
         self.dev.active = False
         self.dev.event("control", "Control type deactivated")
+
+
+class EvFRBC(BatteryFRBC):
+    """Electric vehicle at a charge point as FRBC.
+
+    Fill level = the car's state of charge. Charging is only offered while the car
+    is plugged in; on plug or unplug the gateway sends a new system description.
+    With `target_soc` and `departure` (HH:MM, local time) it also sends a fill level
+    target profile: "at least target_soc % at the next departure".
+    """
+
+    def __init__(self, dev: Device):
+        super().__init__(dev)
+        c = dev.conf
+        self.cap_kwh = float(c.get("capacity_kwh") or 75)
+        self.max_in = float(c.get("max_charge_w") or 11000)
+        self.min_in = float(c.get("min_charge_w") or 1400)
+        self.modes = {k: stable_id(dev.name, "mode", k) for k in ("idle", "charge")}
+        self.ranges = {"idle": (0.0, 0.0), "charge": (self.min_in, self.max_in)}
+        self.target_soc = c.get("target_soc")
+        self.departure = c.get("departure")
+        self.provides_target = bool(self.target_soc and self.departure)
+        self.was_plugged: bool | None = None
+
+    def plugged(self) -> bool:
+        ent = self.dev.conf.get("plugged_entity")
+        if not ent:
+            return True
+        want = str(self.dev.conf.get("plugged_state") or "on")
+        return (self.dev.ha.state(ent) or {}).get("state") == want
+
+    def offered(self) -> list[str]:
+        return ["idle", "charge"] if self.plugged() else ["idle"]
+
+    def next_departure(self) -> dt.datetime | None:
+        try:
+            h, m = (int(x) for x in str(self.departure).split(":")[:2])
+        except (TypeError, ValueError):
+            return None
+        now_local = dt.datetime.now().astimezone()
+        dep = now_local.replace(hour=h, minute=m, second=0, microsecond=0)
+        if dep <= now_local:
+            dep += dt.timedelta(days=1)
+        return dep.astimezone(dt.UTC)
+
+    def target_profile(self) -> FRBCFillLevelTargetProfile | None:
+        dep = self.next_departure() if self.provides_target else None
+        if not dep:
+            return None
+        now = utcnow()
+        to_dep = max(60, int((dep - now).total_seconds()))
+        return FRBCFillLevelTargetProfile(
+            message_id=uuid.uuid4(),
+            start_time=now,
+            elements=[
+                FRBCFillLevelTargetProfileElement(
+                    duration=Duration.from_milliseconds(to_dep * 1000),
+                    fill_level_range=NumberRange(start_of_range=0, end_of_range=100),
+                ),
+                FRBCFillLevelTargetProfileElement(
+                    duration=Duration.from_milliseconds(3600 * 1000),
+                    fill_level_range=NumberRange(
+                        start_of_range=float(self.target_soc), end_of_range=100
+                    ),
+                ),
+            ],
+        )
+
+    def current_mode(self) -> tuple[uuid.UUID, float]:
+        w = self.dev.power_w() or 0.0
+        if w > 200 and self.plugged():
+            span = max(1.0, self.max_in - self.min_in)
+            return self.modes["charge"], max(0.0, min(1.0, (w - self.min_in) / span))
+        return self.modes["idle"], 0.0
+
+    def describe(self, connection) -> None:
+        self.dev.send(connection, self.description())
+        prof = self.target_profile()
+        if prof is not None:
+            self.dev.send(connection, prof)
+            self.dev.stats["target"] = f"{self.target_soc}% at {self.departure}"
+
+    def tick(self, connection) -> None:
+        plugged = self.plugged()
+        self.dev.stats["plugged_in"] = plugged
+        if self.was_plugged is not None and plugged != self.was_plugged:
+            self.dev.event(
+                "connect" if plugged else "disconnect",
+                "Car plugged in: charging offered to the energy manager"
+                if plugged
+                else "Car unplugged: only idle offered",
+            )
+            self.describe(connection)
+        self.was_plugged = plugged
+        super().tick(connection)
+
+    def activate(self, connection) -> None:
+        self.dev.stats["control_type"] = "FRBC"
+        self.dev.event(
+            "control", "Energy manager selected fill rate based (FRBC): it may now send instructions"
+        )
+        self.was_plugged = self.plugged()
+        self.dev.stats["plugged_in"] = self.was_plugged
+        self.describe(connection)
+        self.dev.start_loop(connection, self.tick)
+        log.info("%s: FRBC active (EV, plugged in: %s)", self.dev.name, self.was_plugged)
 
 
 class SwitchOMBC(OMBCControlType):
@@ -406,11 +522,17 @@ class Gateway:
         if typ == "battery":
             roles = [Role(role=RoleType.ENERGY_STORAGE, commodity=Commodity.ELECTRICITY)]
             cts = [BatteryFRBC(dev), NoControl(dev)]
+        elif typ == "ev":
+            roles = [Role(role=RoleType.ENERGY_STORAGE, commodity=Commodity.ELECTRICITY)]
+            cts = [EvFRBC(dev), NoControl(dev)]
         elif typ == "switch":
             roles = [Role(role=RoleType.ENERGY_CONSUMER, commodity=Commodity.ELECTRICITY)]
             cts = [SwitchOMBC(dev), NoControl(dev)]
+        elif typ == "pv":  # measurements only for now; curtailment (PEBC) follows
+            roles = [Role(role=RoleType.ENERGY_PRODUCER, commodity=Commodity.ELECTRICITY)]
+            cts = [NoControl(dev)]
         else:
-            raise ValueError(f"device {dev.name}: unknown type {typ} (battery, switch)")
+            raise ValueError(f"device {dev.name}: unknown type {typ} (battery, ev, switch, pv)")
         details = AssetDetails(
             resource_id=dev.rm_id,
             name=f"{self.site}/{dev.name}",
@@ -476,10 +598,14 @@ class Gateway:
                 {
                     "name": d.name,
                     "type": d.conf.get("type"),
+                    "model": d.conf.get("label"),
+                    "icon": d.conf.get("icon") or d.conf.get("type"),
                     "rm_id": str(d.rm_id),
                     "state": state,
                     "label": label,
-                    "rating_w": d.conf.get("power_w") or d.conf.get("max_discharge_w"),
+                    "rating_w": d.conf.get("power_w")
+                    or d.conf.get("max_discharge_w")
+                    or d.conf.get("max_charge_w"),
                     "capacity_kwh": d.conf.get("capacity_kwh"),
                     **st,
                     "events": list(d.events),
