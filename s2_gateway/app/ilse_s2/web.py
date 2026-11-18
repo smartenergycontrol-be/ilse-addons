@@ -16,11 +16,11 @@ PAGE = r"""<!doctype html>
 <style>
 :root{--bg:#f4f5f2;--card:#fff;--fg:#1c2320;--mu:#5f6a64;--ln:#dde2dd;
 --ilse:#0f6e56;--ilse-bg:#e1f3ec;--watch:#185fa5;--watch-bg:#e4f0fb;--ready:#534ab7;--ready-bg:#eceafb;
---taken:#9a5a00;--taken-bg:#fdf0d8;--bad:#a32d2d;--bat:#185fa5;--heat:#d85a30;
+--taken:#9a5a00;--taken-bg:#fdf0d8;--bad:#a32d2d;--bat:#185fa5;--heat:#d85a30;--ev:#534ab7;--pv:#ba7517;
 --f:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;--m:ui-monospace,"SFMono-Regular",Consolas,monospace}
 @media (prefers-color-scheme:dark){:root{--bg:#121614;--card:#1b201d;--fg:#e7ece9;--mu:#9ba69f;--ln:#2d3430;
 --ilse:#5dcaa5;--ilse-bg:#0c3b2f;--watch:#85b7eb;--watch-bg:#0f2f50;--ready:#afa9ec;--ready-bg:#26215c;
---taken:#f2b552;--taken-bg:#40290a;--bad:#f09595;--bat:#85b7eb;--heat:#f0997b;color-scheme:dark}}
+--taken:#f2b552;--taken-bg:#40290a;--bad:#f09595;--bat:#85b7eb;--heat:#f0997b;--ev:#afa9ec;--pv:#ef9f27;color-scheme:dark}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--f)}
 main{max-width:1060px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:16px}
 h1{font-size:22px;font-weight:600;margin:0}.mu{color:var(--mu);font-size:13px}
@@ -35,7 +35,7 @@ h1{font-size:22px;font-weight:600;margin:0}.mu{color:var(--mu);font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .card.taken{border:2px solid var(--taken)}
-.hd{display:flex;align-items:center;gap:12px}.hd svg.dev{width:40px;height:40px;flex:none}
+.hd{display:flex;align-items:center;gap:12px}.hd svg.dev{width:56px;height:56px;flex:none;padding:6px;border-radius:14px;background:var(--bg)}
 .hd .n{font-size:17px;font-weight:600}.hd .t{font:12px var(--m);color:var(--mu)}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;border-radius:999px;padding:4px 12px}
 .pill i{width:8px;height:8px;border-radius:50%;background:currentColor}
@@ -65,25 +65,32 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hm=s=>s?new Date(s).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
 function ago(s){if(!s)return'';const m=Math.round((Date.now()-new Date(s))/60000);return m<1?'just now':m<60?m+' min ago':Math.round(m/60)+' h ago'}
+const SVG=(c,body)=>`<svg class="dev" viewBox="0 0 64 64" style="color:var(${c})">${body}</svg>`;
 const ICON={
-battery:'<svg class="dev" viewBox="0 0 40 40" style="color:var(--bat)"><rect x="5" y="11" width="27" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2.4"/><rect x="32" y="16" width="4" height="8" rx="1" fill="currentColor"/><path d="M19 14 L14 21 H19 L17 26 L24 19 H19 L21 14 Z" fill="currentColor"/></svg>',
-switch:'<svg class="dev" viewBox="0 0 40 40" style="color:var(--heat)"><rect x="11" y="4" width="18" height="32" rx="7" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M20 14 C24 19 25 22 25 24 A5 5 0 0 1 15 24 C15 20 18 19 20 14 Z" fill="currentColor"/></svg>'};
+battery:SVG('--bat','<rect x="16" y="8" width="32" height="50" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><rect x="26" y="4" width="12" height="5" rx="1.5" fill="currentColor"/><rect x="21" y="40" width="22" height="13" rx="2" fill="currentColor" opacity=".35"/><rect x="21" y="25" width="22" height="13" rx="2" fill="currentColor" opacity=".6"/><path d="M33 12 L27 22 H32 L30 30 L37 19 H32 L34 12 Z" fill="currentColor"/>'),
+inverter:SVG('--bat','<rect x="14" y="6" width="36" height="46" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><rect x="20" y="13" width="24" height="14" rx="2" fill="currentColor" opacity=".25"/><path d="M22 20 Q26 15 30 20 T38 20" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="24" cy="38" r="2.5" fill="currentColor"/><circle cx="32" cy="38" r="2.5" fill="currentColor" opacity=".5"/><path d="M20 52 V58 M44 52 V58" stroke="currentColor" stroke-width="2.5"/>'),
+pv:SVG('--pv','<path d="M8 44 L16 14 H56 L48 44 Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M29 14 L22 44 M42 14 L35 44 M12 29 H52" stroke="currentColor" stroke-width="1.8"/><path d="M26 52 H40 M33 44 V52" stroke="currentColor" stroke-width="2.5"/><circle cx="54" cy="8" r="4" fill="currentColor" opacity=".5"/>'),
+charger:SVG('--ev','<rect x="12" y="6" width="22" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><rect x="17" y="12" width="12" height="9" rx="1.5" fill="currentColor" opacity=".3"/><path d="M24 27 L20 34 H24 L22 40 L28 32 H24 L26 27 Z" fill="currentColor"/><path d="M34 22 H42 Q46 22 46 26 V44 Q46 48 50 48 H54" fill="none" stroke="currentColor" stroke-width="2.5"/><rect x="50" y="44" width="8" height="8" rx="2" fill="currentColor"/>'),
+car:SVG('--ev','<path d="M6 40 L11 27 Q13 22 18 22 H44 Q49 22 51 27 L58 40 V48 H6 Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M15 27 H49 L52 36 H12 Z" fill="currentColor" opacity=".2"/><circle cx="17" cy="48" r="5" fill="currentColor"/><circle cx="47" cy="48" r="5" fill="currentColor"/><path d="M33 26 L28 34 H33 L31 40 L38 31 H33 L35 26 Z" fill="currentColor"/>'),
+boiler:SVG('--heat','<rect x="18" y="4" width="28" height="52" rx="12" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M32 20 C38 28 40 32 40 36 A8 8 0 0 1 24 36 C24 30 28 28 32 20 Z" fill="currentColor"/><path d="M24 58 V62 M40 58 V62" stroke="currentColor" stroke-width="2.5"/>'),
+switch:SVG('--heat','<rect x="14" y="10" width="36" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="32" cy="32" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M32 20 V30" stroke="currentColor" stroke-width="2.5"/>')};
+ICON.ev=ICON.car;
 const WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 L22 20 H2 Z"/><path d="M12 10 V14 M12 17 V17.5"/></svg>';
 const OK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12 L11 15 L16 9"/></svg>';
 const fmtW=w=>w==null?'-':(Math.abs(w)>=1000?(w/1000).toFixed(2).replace(/\.?0+$/,'')+' kW':Math.round(w)+' W');
 function card(d){
  const vals=[];
- if(d.type==='battery'){vals.push(`<div class="v"><span>State of charge</span><b>${d.soc==null?'-':Math.round(d.soc)+'%'}</b><div class="soc"><div style="width:${d.soc??0}%"></div></div></div>`)}
+ if(d.type==='battery'||d.type==='ev'){vals.push(`<div class="v"><span>State of charge</span><b>${d.soc==null?'-':Math.round(d.soc)+'%'}</b><div class="soc"><div style="width:${d.soc??0}%"></div></div></div>`)}
  vals.push(`<div class="v"><span>Power now</span><b>${fmtW(d.power_w)}</b></div>`);
  vals.push(`<div class="v"><span>Instructions</span><b>${d.instructions}</b></div>`);
  const li=d.last_instruction;
  const last=li?`<div class="last"><b>Last instruction ${ago(li.received)}</b><br>${esc(Object.entries(li).filter(([k])=>['mode','power_w','factor'].includes(k)).map(([k,v])=>k.replace('_',' ')+' '+v).join(', '))} &middot; ${esc(li.status)}${li.shadow?' (shadow, not executed)':''}</div>`:'';
  const ev=[...(d.events||[])].reverse().map(e=>`<li><time>${hm(e.t)}</time><span class="dot k-${esc(e.kind)}"></span><span>${esc(e.text)}</span></li>`).join('');
  return `<section class="card ${d.state==='taken'?'taken':''}">
-  <div class="hd">${ICON[d.type]||ICON.switch}<div><div class="n">${esc(d.name)}</div><div class="t">${esc(d.type)}${d.capacity_kwh?' &middot; '+d.capacity_kwh+' kWh':''}${d.rating_w?' &middot; '+fmtW(d.rating_w):''}</div></div></div>
+  <div class="hd">${ICON[d.icon]||ICON[d.type]||ICON.switch}<div><div class="n">${esc(d.name)}</div>${d.model?`<div class="mu">${esc(d.model)}</div>`:''}<div class="t">${esc(d.type)}${d.capacity_kwh?' &middot; '+d.capacity_kwh+' kWh':''}${d.rating_w?' &middot; '+fmtW(d.rating_w):''}</div></div></div>
   <div><span class="pill s-${esc(d.state)}"><i></i>${esc(d.label)}</span></div>
   <div class="vals">${vals.join('')}</div>
-  <dl class="kv"><dt>S2 control type</dt><dd>${esc(d.control_type||'none')}</dd><dt>Connected since</dt><dd>${d.connected_since?hm(d.connected_since)+' ('+ago(d.connected_since)+')':'not connected'}</dd><dt>Resource id</dt><dd style="font-family:var(--m);font-size:12px">${esc(d.rm_id)}</dd></dl>
+  <dl class="kv">${d.type==='ev'?`<dt>Car</dt><dd>${d.plugged_in?'plugged in':'not plugged in'}</dd><dt>Target</dt><dd>${esc(d.target||'none')}</dd>`:''}<dt>S2 control type</dt><dd>${esc(d.control_type||'none')}</dd><dt>Connected since</dt><dd>${d.connected_since?hm(d.connected_since)+' ('+ago(d.connected_since)+')':'not connected'}</dd><dt>Resource id</dt><dd style="font-family:var(--m);font-size:12px">${esc(d.rm_id)}</dd></dl>
   ${last}
   <div><h2>Timeline</h2><ul class="tl">${ev||'<li><time></time><span></span><span class="mu">nothing yet</span></li>'}</ul></div>
  </section>`}

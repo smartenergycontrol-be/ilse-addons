@@ -98,7 +98,8 @@ class Session:
             act = msg.actuators[0]
             modes = {m.diagnostic_label: m for m in act.operation_modes}
             self.ev("frbc-description", modes=list(modes), storage=msg.storage.fill_level_label)
-            if self.send_instruction and not self.instruction_sent and "discharge" in modes:
+            key = "discharge" if "discharge" in modes else ("charge" if "charge" in modes else None)
+            if self.send_instruction and not self.instruction_sent and key:
                 self.instruction_sent = True
                 await asyncio.sleep(2)
 
@@ -107,13 +108,13 @@ class Session:
                         message_id=uuid.uuid4(),
                         id=uuid.uuid4(),
                         actuator_id=act.id,
-                        operation_mode=modes["discharge"].id,
+                        operation_mode=modes[key].id,
                         operation_mode_factor=0.6,
                         execution_time=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=30),
                         abnormal_condition=False,
                     )
 
-                await self.instruct(make, mode="discharge", factor=0.6)
+                await self.instruct(make, mode=key, factor=0.6)
         elif t == "OMBC.SystemDescription":
             modes = {m.diagnostic_label: m for m in msg.operation_modes}
             self.ev("ombc-description", modes=list(modes))
@@ -132,6 +133,9 @@ class Session:
                     )
 
                 await self.instruct(make, mode="on")
+        elif t == "FRBC.FillLevelTargetProfile":
+            last = msg.elements[-1].fill_level_range
+            self.ev("target-profile", min_soc=last.start_of_range, elements=len(msg.elements))
         elif t == "PowerMeasurement":
             self.ev("measurement", w=[v.value for v in msg.values])
         elif t == "FRBC.StorageStatus":
