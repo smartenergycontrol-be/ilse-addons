@@ -33,6 +33,8 @@ Both also offer "not controllable", for a CEM that only wants measurements.
 | --- | --- |
 | `site_name` | Name of this installation, used in the device names and ids (default: host name) |
 | `cem_url` | WebSocket URL of the CEM; `{rm_id}` is replaced by the device id |
+| `cem_token` | Bearer token for the energy manager, if it asks for one |
+| `verify_certificate` | Verify the certificate of a `wss://` energy manager (default true; false only for testing) |
 | `self_test_cem` | Start a minimal test CEM inside the add-on on the port of `cem_url` |
 | `self_test_every_min` | Repeat the self-test instruction every N minutes (0 = once) |
 | `interval_s` | How often status and power are sent |
@@ -79,4 +81,13 @@ selected control type per device, the descriptions, state of charge, measurement
 one test instruction per device and the `REJECTED` answer. Events are also written
 to `/data/s2_events.jsonl` inside the add-on.
 
-To connect to a real CEM, set `self_test_cem: false` and point `cem_url` to it.
+To connect to a real CEM, set `self_test_cem: false` and point `cem_url` to it,
+for example `wss://cem.example.com/ws/{rm_id}`, with the token it gave you in
+`cem_token`. The add-on only connects outward: no ports need to be opened.
+
+## Security
+
+S2 traffic should always run over `wss://` (TLS). The add-on verifies the energy
+manager's certificate and sends `cem_token` as `Authorization: Bearer`, which is how
+S2 Connect authenticates a session after pairing. Pairing itself (S2 Connect pairing
+codes) is not implemented yet: the token is handed out by the energy manager's owner.

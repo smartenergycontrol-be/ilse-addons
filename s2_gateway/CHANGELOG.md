@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- `cem_token`: bearer token for the energy manager (sent as `Authorization: Bearer`,
+  as in S2 Connect), for connecting to an external energy manager over `wss://`.
+- Certificates of a `wss://` energy manager are now verified against the system
+  trust store (the s2-python quickstart turns verification off).
+  `verify_certificate: false` only for testing with a self-signed certificate.
+
 ## 0.4.0
 
 - Device type `pv`: measurements only for now (S2 "not controllable"); curtailment
